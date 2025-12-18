@@ -20,6 +20,7 @@ class BandcampTrack:
     url: str
     artwork_url: Optional[str] = None
     album: Optional[str] = None
+    genre: Optional[str] = None
     source: str = "bandcamp"
 
 
