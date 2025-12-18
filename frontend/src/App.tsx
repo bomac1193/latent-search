@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary, SearchSettings, DEFAULT_SETTINGS, likeArtist, unlikeArtist } from './api';
+import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary, SearchSettings, DEFAULT_SETTINGS, likeArtist, unlikeArtist, searchExternalSources, ExternalTrack } from './api';
 import './App.css';
 
 type AppState = 'disconnected' | 'connected' | 'searching' | 'results' | 'error';
@@ -24,6 +24,10 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
   const [likedArtists, setLikedArtists] = useState<Set<string>>(new Set());
+  const [searchMode, setSearchMode] = useState<'spotify' | 'external'>('spotify');
+  const [externalQuery, setExternalQuery] = useState('');
+  const [externalTracks, setExternalTracks] = useState<ExternalTrack[]>([]);
+  const [selectedSources, setSelectedSources] = useState(['bandcamp', 'reddit', 'soundcloud']);
   const userId = getUserId();
 
   // Check for OAuth callback on mount
@@ -104,6 +108,30 @@ function App() {
     });
   };
 
+  const handleExternalSearch = async () => {
+    if (!externalQuery.trim()) return;
+
+    setState('searching');
+    setError(null);
+
+    try {
+      const response = await searchExternalSources(externalQuery, selectedSources, 30);
+      setExternalTracks(response.tracks);
+      setState('results');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'External search failed');
+      setState('error');
+    }
+  };
+
+  const toggleSource = (source: string) => {
+    setSelectedSources(prev =>
+      prev.includes(source)
+        ? prev.filter(s => s !== source)
+        : [...prev, source]
+    );
+  };
+
   const handleLike = async (rec: Recommendation) => {
     const isLiked = likedArtists.has(rec.artist_id);
 
@@ -129,11 +157,92 @@ function App() {
       <header className="header">
         <h1>Latent Search</h1>
         <p className="tagline">Discover what algorithms exclude</p>
+        <div className="mode-toggle">
+          <button
+            className={`mode-btn ${searchMode === 'spotify' ? 'active' : ''}`}
+            onClick={() => setSearchMode('spotify')}
+          >
+            Spotify Analysis
+          </button>
+          <button
+            className={`mode-btn ${searchMode === 'external' ? 'active' : ''}`}
+            onClick={() => setSearchMode('external')}
+          >
+            External Sources
+          </button>
+        </div>
       </header>
 
       <main className="main">
+        {/* External Search Mode */}
+        {searchMode === 'external' && state !== 'searching' && (
+          <div className="action-section">
+            <p className="description">
+              Search Bandcamp, Reddit, and SoundCloud for underground music outside Spotify's algorithm.
+            </p>
+
+            <div className="external-search">
+              <input
+                type="text"
+                placeholder="Enter genre or artist (e.g., experimental electronic)"
+                value={externalQuery}
+                onChange={(e) => setExternalQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleExternalSearch()}
+                className="search-input"
+              />
+
+              <div className="source-toggles">
+                {['bandcamp', 'reddit', 'soundcloud'].map(source => (
+                  <label key={source} className="source-toggle">
+                    <input
+                      type="checkbox"
+                      checked={selectedSources.includes(source)}
+                      onChange={() => toggleSource(source)}
+                    />
+                    <span>{source}</span>
+                  </label>
+                ))}
+              </div>
+
+              <button
+                className="btn btn-primary"
+                onClick={handleExternalSearch}
+                disabled={!externalQuery.trim() || selectedSources.length === 0}
+              >
+                Search Underground
+              </button>
+            </div>
+
+            {externalTracks.length > 0 && (
+              <div className="external-results">
+                <p className="results-count">{externalTracks.length} tracks found</p>
+                <ul className="external-tracks">
+                  {externalTracks.map((track) => (
+                    <li key={track.id} className="external-track">
+                      {track.artwork_url && (
+                        <img src={track.artwork_url} alt="" className="track-art" />
+                      )}
+                      <div className="track-info">
+                        <a href={track.url} target="_blank" rel="noopener noreferrer" className="track-title">
+                          {track.title}
+                        </a>
+                        <span className="track-artist">{track.artist}</span>
+                        <div className="track-meta">
+                          <span className={`source-badge ${track.source}`}>{track.source}</span>
+                          <span className="shadow-badge">{(track.shadow_score * 100).toFixed(0)}</span>
+                          {track.genre && <span className="genre-tag">{track.genre}</span>}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Disconnected State */}
-        {state === 'disconnected' && (
+        {state === 'disconnected' && searchMode === 'spotify' && (
           <div className="action-section">
             <p className="description">
               Connect your Spotify account to analyze your listening history
@@ -146,7 +255,7 @@ function App() {
         )}
 
         {/* Connected State */}
-        {state === 'connected' && (
+        {state === 'connected' && searchMode === 'spotify' && (
           <div className="action-section">
             <p className="status">Spotify connected</p>
 
@@ -234,7 +343,7 @@ function App() {
         )}
 
         {/* Results State */}
-        {state === 'results' && (
+        {state === 'results' && searchMode === 'spotify' && (
           <div className="results-section">
             {contextSummary && (
               <div className="context-summary">

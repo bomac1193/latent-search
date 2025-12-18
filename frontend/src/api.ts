@@ -164,3 +164,49 @@ export async function getLikeStats(userId: string): Promise<LikeStats> {
   const response = await fetch(`${API_BASE}/likes/stats?user_id=${encodeURIComponent(userId)}`);
   return response.json();
 }
+
+// =========================================================================
+// EXTERNAL SOURCE SEARCH
+// =========================================================================
+
+export interface ExternalTrack {
+  id: string;
+  title: string;
+  artist: string;
+  source: string;
+  url: string;
+  artwork_url: string | null;
+  embed_url: string | null;
+  genre: string | null;
+  plays: number | null;
+  upvotes: number | null;
+  shadow_score: number;
+}
+
+export interface ExternalSearchResponse {
+  tracks: ExternalTrack[];
+  sources_searched: string[];
+  total_found: number;
+}
+
+/**
+ * Search external sources (Bandcamp, Reddit, SoundCloud) for underground music.
+ */
+export async function searchExternalSources(
+  query: string,
+  sources: string[] = ['bandcamp', 'reddit', 'soundcloud'],
+  limit: number = 30
+): Promise<ExternalSearchResponse> {
+  const params = new URLSearchParams({
+    query,
+    sources: sources.join(','),
+    limit: limit.toString(),
+  });
+
+  const response = await fetch(`${API_BASE}/search/external?${params}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'External search failed' }));
+    throw new Error(error.detail || 'External search failed');
+  }
+  return response.json();
+}

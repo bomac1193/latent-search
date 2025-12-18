@@ -22,6 +22,7 @@ from context_builder import build_user_context
 from candidate_expander import expand_candidates
 from omission_scorer import get_top_recommendations
 import database as db
+from sources import search_all_sources, ExternalTrack
 
 
 app = FastAPI(
@@ -93,6 +94,28 @@ class LikeStatsResponse(BaseModel):
     max_popularity: int
     avg_omission_score: float
     top_genres: list
+
+
+class ExternalTrackResponse(BaseModel):
+    """A track from external sources."""
+    id: str
+    title: str
+    artist: str
+    source: str
+    url: str
+    artwork_url: Optional[str] = None
+    embed_url: Optional[str] = None
+    genre: Optional[str] = None
+    plays: Optional[int] = None
+    upvotes: Optional[int] = None
+    shadow_score: float
+
+
+class ExternalSearchResponse(BaseModel):
+    """Response from external source search."""
+    tracks: list[ExternalTrackResponse]
+    sources_searched: list[str]
+    total_found: int
 
 
 class TokenResponse(BaseModel):
@@ -248,6 +271,62 @@ def _get_top_genres(genre_weights: dict[str, float], limit: int) -> list[str]:
         reverse=True
     )
     return [g[0] for g in sorted_genres[:limit]]
+
+
+# =========================================================================
+# EXTERNAL SOURCES ENDPOINT
+# =========================================================================
+
+@app.get("/search/external", response_model=ExternalSearchResponse)
+async def search_external_sources(
+    query: str = Query(..., description="Search query (genre, artist, etc.)"),
+    sources: str = Query("bandcamp,reddit,soundcloud", description="Comma-separated sources"),
+    limit: int = Query(30, ge=1, le=100, description="Maximum results")
+):
+    """
+    Search external sources for underground/latent music.
+
+    Sources:
+    - bandcamp: Underground/indie artists
+    - reddit: Community-curated discoveries from r/listentothis, r/under10k, etc.
+    - soundcloud: Unreleased/emerging artists
+
+    Results are sorted by "shadow score" - higher = more underground/rare.
+    """
+    source_list = [s.strip() for s in sources.split(",") if s.strip()]
+
+    try:
+        tracks = await search_all_sources(
+            query=query,
+            sources=source_list,
+            limit_per_source=limit // max(len(source_list), 1)
+        )
+
+        response_tracks = [
+            ExternalTrackResponse(
+                id=t.id,
+                title=t.title,
+                artist=t.artist,
+                source=t.source,
+                url=t.url,
+                artwork_url=t.artwork_url,
+                embed_url=t.embed_url,
+                genre=t.genre,
+                plays=t.plays,
+                upvotes=t.upvotes,
+                shadow_score=round(t.shadow_score, 3),
+            )
+            for t in tracks[:limit]
+        ]
+
+        return ExternalSearchResponse(
+            tracks=response_tracks,
+            sources_searched=source_list,
+            total_found=len(response_tracks),
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"External search failed: {str(e)}")
 
 
 # =========================================================================
