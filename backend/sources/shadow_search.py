@@ -38,6 +38,7 @@ class ShadowTrack:
     taste_match: float   # 0-1, higher = better genre match
     combined_score: float  # shadow_score * taste_match
     region: Optional[str]  # Geographic region if known
+    embed_url: Optional[str] = None  # Embeddable player URL
 
 
 # Genre synonyms for better matching
@@ -160,12 +161,14 @@ def convert_to_shadow_track(
     """Convert any source track to unified ShadowTrack format."""
 
     # Extract common fields based on source type
+    embed_url = None
     if isinstance(track, AudiusTrack):
         plays = track.plays
         genre = track.genre
         artwork = track.artwork_url
         is_downloadable = track.is_downloadable
         region = None
+        embed_url = track.embed_url
     elif isinstance(track, AudiomackTrack):
         plays = track.plays
         genre = track.genre
@@ -178,29 +181,34 @@ def convert_to_shadow_track(
         artwork = track.artwork_url
         is_downloadable = True  # Archive is all free
         region = None
+        embed_url = track.embed_url
     elif isinstance(track, BandcampTrack):
         plays = None  # Bandcamp doesn't expose plays
         genre = track.genre
         artwork = track.artwork_url
         is_downloadable = False
         region = None
+        embed_url = track.embed_url
     elif isinstance(track, RedditTrack):
         plays = None
         genre = track.genre
         artwork = track.thumbnail
         is_downloadable = False
         region = None
+        embed_url = track.embed_url
     elif isinstance(track, SoundCloudTrack):
         plays = track.plays
         genre = track.genre
         artwork = track.artwork_url
         is_downloadable = False
         region = None
+        embed_url = track.embed_url
     else:
         # Generic fallback
         plays = getattr(track, 'plays', None)
         genre = getattr(track, 'genre', None)
         artwork = getattr(track, 'artwork_url', None)
+        embed_url = getattr(track, 'embed_url', None)
         is_downloadable = False
         region = None
 
@@ -221,6 +229,7 @@ def convert_to_shadow_track(
         taste_match=round(taste_match, 3),
         combined_score=round(combined, 3),
         region=region,
+        embed_url=embed_url,
     )
 
 

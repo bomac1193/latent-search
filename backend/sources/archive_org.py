@@ -27,6 +27,7 @@ class ArchiveTrack:
     year: Optional[int]
     downloads: int  # Number of downloads
     description: Optional[str]
+    embed_url: Optional[str] = None  # Archive.org embed player URL
 
 
 # Collections with underground/experimental music
@@ -118,6 +119,9 @@ async def search_archive(
                 except (ValueError, TypeError):
                     year = None
 
+                # Archive.org embed player URL
+                embed_url = f"https://archive.org/embed/{identifier}"
+
                 track = ArchiveTrack(
                     id=f"archive_{identifier}",
                     title=doc.get("title", "Untitled"),
@@ -128,6 +132,7 @@ async def search_archive(
                     year=year,
                     downloads=doc.get("downloads", 0),
                     description=doc.get("description", "")[:200] if doc.get("description") else None,
+                    embed_url=embed_url,
                 )
                 tracks.append(track)
 

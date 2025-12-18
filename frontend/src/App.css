@@ -126,8 +126,6 @@
 }
 
 .external-track {
-  display: flex;
-  gap: 1rem;
   padding: 1rem;
   background: #111;
   border: 1px solid #222;
@@ -280,6 +278,72 @@
 /* Shadow track styling */
 .shadow-track {
   border-left: 3px solid #9b59b6;
+}
+
+/* Track row layout */
+.track-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+/* Play button */
+.play-btn {
+  background: rgba(29, 185, 84, 0.15);
+  border: 1px solid #1db954;
+  color: #1db954;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.play-btn:hover {
+  background: rgba(29, 185, 84, 0.3);
+  transform: scale(1.05);
+}
+
+.play-btn.active {
+  background: #1db954;
+  color: #000;
+}
+
+/* Embedded player */
+.track-player {
+  margin-top: 0.75rem;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+.track-player iframe {
+  width: 100%;
+  height: 120px;
+  border: none;
+  display: block;
+}
+
+/* Adjust height for different sources */
+.external-track:has(.source-badge.soundcloud) .track-player iframe {
+  height: 166px;
+}
+
+.external-track:has(.source-badge.audius) .track-player iframe {
+  height: 120px;
+}
+
+.external-track:has(.source-badge.archive) .track-player iframe {
+  height: 80px;
+}
+
+.external-track:has(.source-badge.bandcamp) .track-player iframe {
+  height: 120px;
 }
 
 /* Main Content */

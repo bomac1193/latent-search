@@ -132,6 +132,7 @@ class ShadowTrackResponse(BaseModel):
     taste_match: float
     combined_score: float
     region: Optional[str] = None
+    embed_url: Optional[str] = None
 
 
 class ShadowSearchResponse(BaseModel):
@@ -419,6 +420,7 @@ async def run_shadow_search(
                 taste_match=t.taste_match,
                 combined_score=t.combined_score,
                 region=t.region,
+                embed_url=t.embed_url,
             )
             for t in tracks[:limit]
         ]
@@ -496,6 +498,7 @@ async def run_shadow_search_with_spotify(
                 taste_match=t.taste_match,
                 combined_score=t.combined_score,
                 region=t.region,
+                embed_url=t.embed_url,
             )
             for t in tracks[:limit]
         ]

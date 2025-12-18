@@ -21,7 +21,17 @@ class BandcampTrack:
     artwork_url: Optional[str] = None
     album: Optional[str] = None
     genre: Optional[str] = None
+    embed_url: Optional[str] = None
     source: str = "bandcamp"
+
+
+def _make_bandcamp_embed_url(track_url: str) -> Optional[str]:
+    """Create Bandcamp embed URL from track URL."""
+    if not track_url or "bandcamp.com" not in track_url:
+        return None
+    # Bandcamp embed format - use the track page URL directly
+    # The embed will auto-detect from the URL
+    return track_url.replace("/track/", "/EmbeddedPlayer/track=") if "/track/" in track_url else None
 
 
 async def search_bandcamp(
@@ -91,6 +101,7 @@ async def search_bandcamp(
                 url=track_url,
                 artwork_url=artwork_url,
                 album=album,
+                embed_url=_make_bandcamp_embed_url(track_url),
             )
             tracks.append(track)
 
@@ -152,6 +163,7 @@ async def search_bandcamp_by_tag(
                 artist=artist,
                 url=track_url,
                 artwork_url=artwork_url,
+                embed_url=_make_bandcamp_embed_url(track_url),
             )
             tracks.append(track)
 

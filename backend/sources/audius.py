@@ -22,6 +22,8 @@ class AudiusTrack:
     plays: int
     duration: int  # seconds
     is_downloadable: bool
+    stream_url: Optional[str] = None  # Direct stream URL
+    embed_url: Optional[str] = None   # Embed player URL
 
 
 # Audius API hosts - select one at random for load balancing
@@ -111,8 +113,13 @@ async def search_audius(
                 if genre_filter and genre_filter.lower() not in track_genre.lower():
                     continue
 
+                # Build stream and embed URLs
+                track_id = item.get("id", "")
+                stream_url = f"{host}/v1/tracks/{track_id}/stream?app_name={APP_NAME}" if track_id else None
+                embed_url = f"https://audius.co/embed/track/{track_id}" if track_id else None
+
                 track = AudiusTrack(
-                    id=f"audius_{item.get('id', '')}",
+                    id=f"audius_{track_id}",
                     title=item.get("title", "Untitled"),
                     artist=artist_name,
                     url=track_url,
@@ -121,6 +128,8 @@ async def search_audius(
                     plays=item.get("play_count", 0),
                     duration=item.get("duration", 0),
                     is_downloadable=item.get("downloadable", False),
+                    stream_url=stream_url,
+                    embed_url=embed_url,
                 )
                 tracks.append(track)
 

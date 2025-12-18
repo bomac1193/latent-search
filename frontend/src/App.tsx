@@ -47,7 +47,12 @@ function App() {
   const [shadowTracks, setShadowTracks] = useState<ShadowTrack[]>([]);
   const [shadowGenres, setShadowGenres] = useState<string[]>([]);
   const [deepSearch, setDeepSearch] = useState(false);
+  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const userId = getUserId();
+
+  const togglePlayer = (trackId: string) => {
+    setExpandedPlayer(prev => prev === trackId ? null : trackId);
+  };
 
   // Check for OAuth callback on mount
   useEffect(() => {
@@ -284,26 +289,47 @@ function App() {
                     <ul className="external-tracks">
                       {shadowTracks.map((track) => (
                         <li key={track.id} className="external-track shadow-track">
-                          {track.artwork_url && (
-                            <img src={track.artwork_url} alt="" className="track-art" />
-                          )}
-                          <div className="track-info">
-                            <a href={track.url} target="_blank" rel="noopener noreferrer" className="track-title">
-                              {track.title}
-                            </a>
-                            <span className="track-artist">{track.artist}</span>
-                            <div className="track-meta">
-                              <span className={`source-badge ${track.source}`}>{track.source}</span>
-                              <span className="shadow-badge" title="Shadow Score">
-                                {(track.shadow_score * 100).toFixed(0)}
-                              </span>
-                              <span className="taste-badge" title="Taste Match">
-                                {(track.taste_match * 100).toFixed(0)}%
-                              </span>
-                              {track.genre && <span className="genre-tag">{track.genre}</span>}
-                              {track.region && <span className="region-badge">{track.region}</span>}
+                          <div className="track-row">
+                            {track.artwork_url && (
+                              <img src={track.artwork_url} alt="" className="track-art" />
+                            )}
+                            <div className="track-info">
+                              <a href={track.url} target="_blank" rel="noopener noreferrer" className="track-title">
+                                {track.title}
+                              </a>
+                              <span className="track-artist">{track.artist}</span>
+                              <div className="track-meta">
+                                <span className={`source-badge ${track.source}`}>{track.source}</span>
+                                <span className="shadow-badge" title="Shadow Score">
+                                  {(track.shadow_score * 100).toFixed(0)}
+                                </span>
+                                <span className="taste-badge" title="Taste Match">
+                                  {(track.taste_match * 100).toFixed(0)}%
+                                </span>
+                                {track.genre && <span className="genre-tag">{track.genre}</span>}
+                                {track.region && <span className="region-badge">{track.region}</span>}
+                              </div>
                             </div>
+                            {track.embed_url && (
+                              <button
+                                className={`play-btn ${expandedPlayer === track.id ? 'active' : ''}`}
+                                onClick={() => togglePlayer(track.id)}
+                                title={expandedPlayer === track.id ? 'Hide Player' : 'Play'}
+                              >
+                                {expandedPlayer === track.id ? '⏹' : '▶'}
+                              </button>
+                            )}
                           </div>
+                          {expandedPlayer === track.id && track.embed_url && (
+                            <div className="track-player">
+                              <iframe
+                                src={track.embed_url}
+                                title={track.title}
+                                allow="autoplay; encrypted-media"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -360,20 +386,41 @@ function App() {
                 <ul className="external-tracks">
                   {externalTracks.map((track) => (
                     <li key={track.id} className="external-track">
-                      {track.artwork_url && (
-                        <img src={track.artwork_url} alt="" className="track-art" />
-                      )}
-                      <div className="track-info">
-                        <a href={track.url} target="_blank" rel="noopener noreferrer" className="track-title">
-                          {track.title}
-                        </a>
-                        <span className="track-artist">{track.artist}</span>
-                        <div className="track-meta">
-                          <span className={`source-badge ${track.source}`}>{track.source}</span>
-                          <span className="shadow-badge">{(track.shadow_score * 100).toFixed(0)}</span>
-                          {track.genre && <span className="genre-tag">{track.genre}</span>}
+                      <div className="track-row">
+                        {track.artwork_url && (
+                          <img src={track.artwork_url} alt="" className="track-art" />
+                        )}
+                        <div className="track-info">
+                          <a href={track.url} target="_blank" rel="noopener noreferrer" className="track-title">
+                            {track.title}
+                          </a>
+                          <span className="track-artist">{track.artist}</span>
+                          <div className="track-meta">
+                            <span className={`source-badge ${track.source}`}>{track.source}</span>
+                            <span className="shadow-badge">{(track.shadow_score * 100).toFixed(0)}</span>
+                            {track.genre && <span className="genre-tag">{track.genre}</span>}
+                          </div>
                         </div>
+                        {track.embed_url && (
+                          <button
+                            className={`play-btn ${expandedPlayer === track.id ? 'active' : ''}`}
+                            onClick={() => togglePlayer(track.id)}
+                            title={expandedPlayer === track.id ? 'Hide Player' : 'Play'}
+                          >
+                            {expandedPlayer === track.id ? '⏹' : '▶'}
+                          </button>
+                        )}
                       </div>
+                      {expandedPlayer === track.id && track.embed_url && (
+                        <div className="track-player">
+                          <iframe
+                            src={track.embed_url}
+                            title={track.title}
+                            allow="autoplay; encrypted-media"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

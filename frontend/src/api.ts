@@ -228,6 +228,7 @@ export interface ShadowTrack {
   taste_match: number;
   combined_score: number;
   region: string | null;
+  embed_url: string | null;
 }
 
 export interface ShadowSearchResponse {
