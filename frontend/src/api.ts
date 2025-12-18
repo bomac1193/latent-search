@@ -92,3 +92,75 @@ export async function runLatentSearch(
   }
   return response.json();
 }
+
+/**
+ * Like an artist recommendation.
+ */
+export async function likeArtist(
+  userId: string,
+  artist: Recommendation
+): Promise<{ success: boolean; liked: boolean }> {
+  const response = await fetch(`${API_BASE}/like`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      artist_id: artist.artist_id,
+      artist_name: artist.artist_name,
+      genres: artist.genres,
+      popularity: artist.popularity,
+      source_genre: artist.found_via_artist,
+      omission_score: artist.omission_score,
+    }),
+  });
+  return response.json();
+}
+
+/**
+ * Unlike an artist.
+ */
+export async function unlikeArtist(
+  userId: string,
+  artistId: string
+): Promise<{ success: boolean; liked: boolean }> {
+  const response = await fetch(
+    `${API_BASE}/like?user_id=${encodeURIComponent(userId)}&artist_id=${encodeURIComponent(artistId)}`,
+    { method: 'DELETE' }
+  );
+  return response.json();
+}
+
+/**
+ * Get all liked artists for a user.
+ */
+export async function getLikes(userId: string): Promise<{ likes: any[] }> {
+  const response = await fetch(`${API_BASE}/likes?user_id=${encodeURIComponent(userId)}`);
+  return response.json();
+}
+
+/**
+ * Check if an artist is liked.
+ */
+export async function checkLike(userId: string, artistId: string): Promise<{ liked: boolean }> {
+  const response = await fetch(
+    `${API_BASE}/likes/check?user_id=${encodeURIComponent(userId)}&artist_id=${encodeURIComponent(artistId)}`
+  );
+  return response.json();
+}
+
+export interface LikeStats {
+  total_likes: number;
+  avg_popularity: number;
+  min_popularity: number;
+  max_popularity: number;
+  avg_omission_score: number;
+  top_genres: [string, number][];
+}
+
+/**
+ * Get like statistics for a user.
+ */
+export async function getLikeStats(userId: string): Promise<LikeStats> {
+  const response = await fetch(`${API_BASE}/likes/stats?user_id=${encodeURIComponent(userId)}`);
+  return response.json();
+}

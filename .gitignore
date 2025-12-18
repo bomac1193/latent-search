@@ -2,6 +2,9 @@
 .env
 *.env
 
+# Database
+*.db
+
 # Python
 __pycache__/
 *.py[cod]

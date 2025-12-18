@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react';
-import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary, SearchSettings, DEFAULT_SETTINGS } from './api';
+import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary, SearchSettings, DEFAULT_SETTINGS, likeArtist, unlikeArtist } from './api';
 import './App.css';
 
 type AppState = 'disconnected' | 'connected' | 'searching' | 'results' | 'error';
+
+// Generate a simple user ID (persisted in localStorage)
+function getUserId(): string {
+  let userId = localStorage.getItem('latent_user_id');
+  if (!userId) {
+    userId = 'user_' + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('latent_user_id', userId);
+  }
+  return userId;
+}
 
 function App() {
   const [state, setState] = useState<AppState>('disconnected');
@@ -13,6 +23,8 @@ function App() {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
+  const [likedArtists, setLikedArtists] = useState<Set<string>>(new Set());
+  const userId = getUserId();
 
   // Check for OAuth callback on mount
   useEffect(() => {
@@ -90,6 +102,26 @@ function App() {
       }
       return next;
     });
+  };
+
+  const handleLike = async (rec: Recommendation) => {
+    const isLiked = likedArtists.has(rec.artist_id);
+
+    try {
+      if (isLiked) {
+        await unlikeArtist(userId, rec.artist_id);
+        setLikedArtists((prev) => {
+          const next = new Set(prev);
+          next.delete(rec.artist_id);
+          return next;
+        });
+      } else {
+        await likeArtist(userId, rec);
+        setLikedArtists((prev) => new Set(prev).add(rec.artist_id));
+      }
+    } catch (err) {
+      console.error('Failed to update like:', err);
+    }
   };
 
   return (
@@ -240,6 +272,13 @@ function App() {
                           ))}
                         </div>
                       </div>
+                      <button
+                        className={`like-btn ${likedArtists.has(rec.artist_id) ? 'liked' : ''}`}
+                        onClick={() => handleLike(rec)}
+                        title={likedArtists.has(rec.artist_id) ? 'Unlike' : 'Like'}
+                      >
+                        {likedArtists.has(rec.artist_id) ? '♥' : '♡'}
+                      </button>
                       <button
                         className="toggle-btn"
                         onClick={() => toggleExpanded(rec.artist_id)}

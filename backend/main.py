@@ -21,6 +21,7 @@ from spotify_client import SpotifyClient, exchange_code_for_token
 from context_builder import build_user_context
 from candidate_expander import expand_candidates
 from omission_scorer import get_top_recommendations
+import database as db
 
 
 app = FastAPI(
@@ -65,6 +66,33 @@ class LatentSearchResponse(BaseModel):
 class AuthUrlResponse(BaseModel):
     """Spotify authorization URL."""
     auth_url: str
+
+
+class LikeRequest(BaseModel):
+    """Request to like an artist."""
+    user_id: str
+    artist_id: str
+    artist_name: str
+    genres: list[str]
+    popularity: int
+    source_genre: Optional[str] = None
+    omission_score: float
+
+
+class LikeResponse(BaseModel):
+    """Response from like/unlike."""
+    success: bool
+    liked: bool
+
+
+class LikeStatsResponse(BaseModel):
+    """User's like statistics."""
+    total_likes: int
+    avg_popularity: float
+    min_popularity: int
+    max_popularity: int
+    avg_omission_score: float
+    top_genres: list
 
 
 class TokenResponse(BaseModel):
@@ -220,6 +248,52 @@ def _get_top_genres(genre_weights: dict[str, float], limit: int) -> list[str]:
         reverse=True
     )
     return [g[0] for g in sorted_genres[:limit]]
+
+
+# =========================================================================
+# LIKES ENDPOINTS
+# =========================================================================
+
+@app.post("/like", response_model=LikeResponse)
+def like_artist(request: LikeRequest):
+    """Like an artist recommendation."""
+    success = db.add_like(
+        user_id=request.user_id,
+        artist_id=request.artist_id,
+        artist_name=request.artist_name,
+        genres=request.genres,
+        popularity=request.popularity,
+        source_genre=request.source_genre,
+        omission_score=request.omission_score
+    )
+    return LikeResponse(success=success, liked=True)
+
+
+@app.delete("/like", response_model=LikeResponse)
+def unlike_artist(user_id: str = Query(...), artist_id: str = Query(...)):
+    """Remove a like from an artist."""
+    success = db.remove_like(user_id, artist_id)
+    return LikeResponse(success=success, liked=False)
+
+
+@app.get("/likes")
+def get_likes(user_id: str = Query(...)):
+    """Get all liked artists for a user."""
+    likes = db.get_user_likes(user_id)
+    return {"likes": likes}
+
+
+@app.get("/likes/check")
+def check_like(user_id: str = Query(...), artist_id: str = Query(...)):
+    """Check if a user has liked an artist."""
+    return {"liked": db.is_liked(user_id, artist_id)}
+
+
+@app.get("/likes/stats", response_model=LikeStatsResponse)
+def get_like_stats(user_id: str = Query(...)):
+    """Get aggregate statistics from user's likes."""
+    stats = db.get_like_stats(user_id)
+    return LikeStatsResponse(**stats)
 
 
 # =========================================================================
