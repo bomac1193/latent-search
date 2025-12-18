@@ -77,8 +77,8 @@ async def expand_candidates(
             results = await client.search_artists(query, limit=50)
             artists = results.get("artists", {}).get("items", [])
 
-            print(f"[DEBUG] Genre '{genre}': found {len(artists)} artists")
-
+            skipped_known = 0
+            skipped_pop = 0
             for artist in artists:
                 artist_id = artist.get("id")
                 if not artist_id:
@@ -86,6 +86,7 @@ async def expand_candidates(
 
                 # Skip known artists
                 if artist_id in context.known_artist_ids:
+                    skipped_known += 1
                     continue
 
                 # Skip if already added
@@ -95,6 +96,7 @@ async def expand_candidates(
                 # Filter by popularity range
                 popularity = artist.get("popularity", 0)
                 if popularity < min_popularity or popularity > max_popularity:
+                    skipped_pop += 1
                     continue
 
                 artist_genres = artist.get("genres", [])
@@ -111,6 +113,8 @@ async def expand_candidates(
 
                 if len(candidates) >= max_candidates:
                     break
+
+            print(f"[DEBUG] Genre '{genre}': {len(artists)} found, {skipped_known} known, {skipped_pop} outside popularity range, {len(candidates)} total candidates")
 
         except Exception as e:
             print(f"[DEBUG] Genre search failed for '{genre}': {e}")
