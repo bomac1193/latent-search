@@ -86,6 +86,78 @@
   background: #444;
 }
 
+.btn-tertiary {
+  background: transparent;
+  color: #888;
+  border: 1px solid #333;
+}
+
+.btn-tertiary:hover {
+  border-color: #555;
+  color: #aaa;
+}
+
+/* Settings Panel */
+.settings-panel {
+  background: #151515;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 1.5rem;
+  margin: 1.5rem auto;
+  max-width: 400px;
+  text-align: left;
+}
+
+.setting-row {
+  margin-bottom: 1.25rem;
+}
+
+.setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.setting-row label {
+  display: block;
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+}
+
+.setting-row select,
+.setting-row input[type="number"] {
+  background: #222;
+  border: 1px solid #444;
+  color: #ddd;
+  padding: 0.5rem;
+  border-radius: 2px;
+  font-size: 0.9rem;
+}
+
+.setting-row select {
+  width: 100%;
+}
+
+.setting-row input[type="range"] {
+  width: 100%;
+  accent-color: #1db954;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.range-inputs input {
+  width: 70px;
+  text-align: center;
+}
+
+.range-inputs span {
+  color: #666;
+  font-size: 0.85rem;
+}
+
 /* Loader */
 .loader {
   width: 24px;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary } from './api';
+import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary, SearchSettings, DEFAULT_SETTINGS } from './api';
 import './App.css';
 
 type AppState = 'disconnected' | 'connected' | 'searching' | 'results' | 'error';
@@ -11,6 +11,8 @@ function App() {
   const [contextSummary, setContextSummary] = useState<ContextSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
 
   // Check for OAuth callback on mount
   useEffect(() => {
@@ -60,7 +62,7 @@ function App() {
     setError(null);
 
     try {
-      const response = await runLatentSearch(accessToken);
+      const response = await runLatentSearch(accessToken, settings);
       setRecommendations(response.recommendations);
       setContextSummary(response.context_summary);
       setState('results');
@@ -115,6 +117,63 @@ function App() {
         {state === 'connected' && (
           <div className="action-section">
             <p className="status">Spotify connected</p>
+
+            <button
+              className="btn btn-tertiary"
+              onClick={() => setShowSettings(!showSettings)}
+            >
+              {showSettings ? 'Hide Settings' : 'Settings'}
+            </button>
+
+            {showSettings && (
+              <div className="settings-panel">
+                <div className="setting-row">
+                  <label>Popularity Range</label>
+                  <div className="range-inputs">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={settings.minPopularity}
+                      onChange={(e) => setSettings({...settings, minPopularity: parseInt(e.target.value) || 0})}
+                    />
+                    <span>to</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={settings.maxPopularity}
+                      onChange={(e) => setSettings({...settings, maxPopularity: parseInt(e.target.value) || 100})}
+                    />
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <label>Time Range</label>
+                  <select
+                    value={settings.timeRange}
+                    onChange={(e) => setSettings({...settings, timeRange: e.target.value as SearchSettings['timeRange']})}
+                  >
+                    <option value="all">All Time Periods</option>
+                    <option value="short">Recent (~4 weeks)</option>
+                    <option value="medium">Medium (~6 months)</option>
+                    <option value="long">Long Term (years)</option>
+                  </select>
+                </div>
+
+                <div className="setting-row">
+                  <label>Max Results: {settings.maxResults}</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={settings.maxResults}
+                    onChange={(e) => setSettings({...settings, maxResults: parseInt(e.target.value)})}
+                  />
+                </div>
+              </div>
+            )}
+
             <button className="btn btn-primary" onClick={handleRunSearch}>
               Run Latent Search
             </button>

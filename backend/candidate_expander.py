@@ -38,7 +38,9 @@ class CandidateArtist:
 async def expand_candidates(
     client: SpotifyClient,
     context: UserContext,
-    max_candidates: int = 100
+    max_candidates: int = 100,
+    min_popularity: int = 5,
+    max_popularity: int = 60
 ) -> list[CandidateArtist]:
     """
     Generate candidate artists from user's context using genre search.
@@ -48,6 +50,8 @@ async def expand_candidates(
     2. Search for artists in those genres
     3. Filter out known artists
     4. Score by genre overlap
+
+    min_popularity/max_popularity: Filter artists by popularity range
     """
     candidates: dict[str, CandidateArtist] = {}
 
@@ -88,9 +92,9 @@ async def expand_candidates(
                 if artist_id in candidates:
                     continue
 
-                # Skip artists with 0-5 popularity (likely spam/inactive)
+                # Filter by popularity range
                 popularity = artist.get("popularity", 0)
-                if popularity < 5:
+                if popularity < min_popularity or popularity > max_popularity:
                     continue
 
                 artist_genres = artist.get("genres", [])

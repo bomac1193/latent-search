@@ -77,25 +77,35 @@ class UserContext:
     known_artist_ids: set[str] = field(default_factory=set)
 
 
-async def build_user_context(client: SpotifyClient) -> UserContext:
+async def build_user_context(client: SpotifyClient, time_range: str = "all") -> UserContext:
     """
     Build a comprehensive longitudinal context profile from user's Spotify data.
 
-    Fetches data across all time ranges and aggregates into stable patterns.
+    Fetches data across time ranges and aggregates into stable patterns.
+
+    time_range: "short", "medium", "long", or "all"
     """
     context = UserContext()
 
     # =========================================================================
-    # STEP 1: Fetch top artists across all time windows
+    # STEP 1: Fetch top artists based on selected time window(s)
     # =========================================================================
-    short_artists = await client.get_top_artists("short_term", 50)
-    medium_artists = await client.get_top_artists("medium_term", 50)
-    long_artists = await client.get_top_artists("long_term", 50)
-
-    # Process each time window
-    _process_artists(context, short_artists.get("items", []), "short")
-    _process_artists(context, medium_artists.get("items", []), "medium")
-    _process_artists(context, long_artists.get("items", []), "long")
+    if time_range == "short":
+        short_artists = await client.get_top_artists("short_term", 50)
+        _process_artists(context, short_artists.get("items", []), "short")
+    elif time_range == "medium":
+        medium_artists = await client.get_top_artists("medium_term", 50)
+        _process_artists(context, medium_artists.get("items", []), "medium")
+    elif time_range == "long":
+        long_artists = await client.get_top_artists("long_term", 50)
+        _process_artists(context, long_artists.get("items", []), "long")
+    else:  # "all"
+        short_artists = await client.get_top_artists("short_term", 50)
+        medium_artists = await client.get_top_artists("medium_term", 50)
+        long_artists = await client.get_top_artists("long_term", 50)
+        _process_artists(context, short_artists.get("items", []), "short")
+        _process_artists(context, medium_artists.get("items", []), "medium")
+        _process_artists(context, long_artists.get("items", []), "long")
 
     # =========================================================================
     # STEP 2: Identify recurring artists (appear in 2+ time windows)
@@ -116,13 +126,23 @@ async def build_user_context(client: SpotifyClient) -> UserContext:
     # =========================================================================
     # STEP 3: Fetch top tracks and audio features
     # =========================================================================
-    short_tracks = await client.get_top_tracks("short_term", 50)
-    medium_tracks = await client.get_top_tracks("medium_term", 50)
-    long_tracks = await client.get_top_tracks("long_term", 50)
-
     all_tracks = []
-    for tracks_response in [short_tracks, medium_tracks, long_tracks]:
-        all_tracks.extend(tracks_response.get("items", []))
+    if time_range == "short":
+        short_tracks = await client.get_top_tracks("short_term", 50)
+        all_tracks.extend(short_tracks.get("items", []))
+    elif time_range == "medium":
+        medium_tracks = await client.get_top_tracks("medium_term", 50)
+        all_tracks.extend(medium_tracks.get("items", []))
+    elif time_range == "long":
+        long_tracks = await client.get_top_tracks("long_term", 50)
+        all_tracks.extend(long_tracks.get("items", []))
+    else:  # "all"
+        short_tracks = await client.get_top_tracks("short_term", 50)
+        medium_tracks = await client.get_top_tracks("medium_term", 50)
+        long_tracks = await client.get_top_tracks("long_term", 50)
+        all_tracks.extend(short_tracks.get("items", []))
+        all_tracks.extend(medium_tracks.get("items", []))
+        all_tracks.extend(long_tracks.get("items", []))
 
     # Deduplicate tracks
     track_ids = list({t["id"] for t in all_tracks if t.get("id")})

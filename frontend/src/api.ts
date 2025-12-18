@@ -56,11 +56,36 @@ export async function exchangeCodeForToken(code: string): Promise<{
   return response.json();
 }
 
+export interface SearchSettings {
+  minPopularity: number;
+  maxPopularity: number;
+  timeRange: 'short' | 'medium' | 'long' | 'all';
+  maxResults: number;
+}
+
+export const DEFAULT_SETTINGS: SearchSettings = {
+  minPopularity: 5,
+  maxPopularity: 60,
+  timeRange: 'all',
+  maxResults: 7,
+};
+
 /**
  * Run Latent Search algorithm.
  */
-export async function runLatentSearch(accessToken: string): Promise<SearchResponse> {
-  const response = await fetch(`${API_BASE}/search?access_token=${encodeURIComponent(accessToken)}`);
+export async function runLatentSearch(
+  accessToken: string,
+  settings: SearchSettings = DEFAULT_SETTINGS
+): Promise<SearchResponse> {
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    min_popularity: settings.minPopularity.toString(),
+    max_popularity: settings.maxPopularity.toString(),
+    time_range: settings.timeRange,
+    max_results: settings.maxResults.toString(),
+  });
+
+  const response = await fetch(`${API_BASE}/search?${params}`);
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Search failed' }));
     throw new Error(error.detail || 'Search failed');

@@ -122,7 +122,11 @@ async def spotify_callback(code: str = Query(...)):
 
 @app.get("/search", response_model=LatentSearchResponse)
 async def run_latent_search(
-    access_token: str = Query(..., description="Spotify access token")
+    access_token: str = Query(..., description="Spotify access token"),
+    min_popularity: int = Query(5, ge=0, le=100, description="Minimum artist popularity"),
+    max_popularity: int = Query(60, ge=0, le=100, description="Maximum artist popularity"),
+    time_range: str = Query("all", description="Time range: short, medium, long, or all"),
+    max_results: int = Query(7, ge=1, le=20, description="Maximum results to return")
 ):
     """
     Run Latent Search algorithm.
@@ -140,10 +144,15 @@ async def run_latent_search(
         client = SpotifyClient(access_token)
 
         # Step 1: Build user context from listening history
-        context = await build_user_context(client)
+        context = await build_user_context(client, time_range=time_range)
 
         # Step 2: Expand candidates from context
-        candidates = await expand_candidates(client, context, max_candidates=100)
+        candidates = await expand_candidates(
+            client, context,
+            max_candidates=100,
+            min_popularity=min_popularity,
+            max_popularity=max_popularity
+        )
 
         if not candidates:
             # Debug info: show which artists we tried to expand from
@@ -166,7 +175,7 @@ async def run_latent_search(
 
         # Step 3: Score and rank candidates
         top_recommendations = get_top_recommendations(
-            candidates, context, limit=MAX_RESULTS
+            candidates, context, limit=max_results
         )
 
         # Step 4: Format response
