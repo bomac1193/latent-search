@@ -198,12 +198,88 @@
   color: #ff8800;
 }
 
+.source-badge.audius {
+  background: rgba(126, 87, 194, 0.2);
+  color: #7e57c2;
+}
+
+.source-badge.audiomack {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffaa00;
+}
+
+.source-badge.archive {
+  background: rgba(66, 133, 244, 0.2);
+  color: #4285f4;
+}
+
 .shadow-badge {
   font-size: 0.7rem;
   padding: 0.15rem 0.5rem;
   border-radius: 2px;
   background: rgba(138, 43, 226, 0.2);
   color: #9b59b6;
+}
+
+.taste-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  background: rgba(29, 185, 84, 0.2);
+  color: #1db954;
+}
+
+.region-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  background: rgba(52, 152, 219, 0.2);
+  color: #3498db;
+}
+
+/* Source toggles grid for more sources */
+.source-toggles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Deep search toggle */
+.deep-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  color: #888;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.deep-toggle input {
+  accent-color: #9b59b6;
+}
+
+.deep-toggle input:checked + span {
+  color: #9b59b6;
+}
+
+/* Shadow search summary */
+.shadow-summary {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.genres-used {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+/* Shadow track styling */
+.shadow-track {
+  border-left: 3px solid #9b59b6;
 }
 
 /* Main Content */

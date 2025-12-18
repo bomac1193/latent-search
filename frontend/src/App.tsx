@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react';
-import { getSpotifyAuthUrl, exchangeCodeForToken, runLatentSearch, Recommendation, ContextSummary, SearchSettings, DEFAULT_SETTINGS, likeArtist, unlikeArtist, searchExternalSources, ExternalTrack } from './api';
+import {
+  getSpotifyAuthUrl,
+  exchangeCodeForToken,
+  runLatentSearch,
+  Recommendation,
+  ContextSummary,
+  SearchSettings,
+  DEFAULT_SETTINGS,
+  likeArtist,
+  unlikeArtist,
+  searchExternalSources,
+  ExternalTrack,
+  shadowSearchWithSpotify,
+  ShadowTrack,
+  ALL_SOURCES
+} from './api';
 import './App.css';
 
 type AppState = 'disconnected' | 'connected' | 'searching' | 'results' | 'error';
+type SearchMode = 'spotify' | 'external' | 'shadow';
 
 // Generate a simple user ID (persisted in localStorage)
 function getUserId(): string {
@@ -24,10 +40,13 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
   const [likedArtists, setLikedArtists] = useState<Set<string>>(new Set());
-  const [searchMode, setSearchMode] = useState<'spotify' | 'external'>('spotify');
+  const [searchMode, setSearchMode] = useState<SearchMode>('spotify');
   const [externalQuery, setExternalQuery] = useState('');
   const [externalTracks, setExternalTracks] = useState<ExternalTrack[]>([]);
-  const [selectedSources, setSelectedSources] = useState(['bandcamp', 'reddit', 'soundcloud']);
+  const [selectedSources, setSelectedSources] = useState(['audius', 'audiomack', 'archive', 'bandcamp', 'reddit', 'soundcloud']);
+  const [shadowTracks, setShadowTracks] = useState<ShadowTrack[]>([]);
+  const [shadowGenres, setShadowGenres] = useState<string[]>([]);
+  const [deepSearch, setDeepSearch] = useState(false);
   const userId = getUserId();
 
   // Check for OAuth callback on mount
@@ -124,6 +143,28 @@ function App() {
     }
   };
 
+  const handleShadowSearch = async () => {
+    if (!accessToken) return;
+
+    setState('searching');
+    setError(null);
+
+    try {
+      const response = await shadowSearchWithSpotify(
+        accessToken,
+        selectedSources,
+        50,
+        deepSearch
+      );
+      setShadowTracks(response.tracks);
+      setShadowGenres(response.genres_searched);
+      setState('results');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Shadow search failed');
+      setState('error');
+    }
+  };
+
   const toggleSource = (source: string) => {
     setSelectedSources(prev =>
       prev.includes(source)
@@ -165,6 +206,12 @@ function App() {
             Spotify Analysis
           </button>
           <button
+            className={`mode-btn ${searchMode === 'shadow' ? 'active' : ''}`}
+            onClick={() => setSearchMode('shadow')}
+          >
+            Shadow Search
+          </button>
+          <button
             className={`mode-btn ${searchMode === 'external' ? 'active' : ''}`}
             onClick={() => setSearchMode('external')}
           >
@@ -174,32 +221,126 @@ function App() {
       </header>
 
       <main className="main">
+        {/* Shadow Search Mode - Taste-Matched Underground Discovery */}
+        {searchMode === 'shadow' && state !== 'searching' && (
+          <div className="action-section">
+            {!accessToken ? (
+              <>
+                <p className="description">
+                  Shadow Search uses your Spotify listening history to find taste-matched
+                  music from underground sources - Audius, Audiomack, Archive.org, and more.
+                </p>
+                <button className="btn btn-primary" onClick={handleConnectSpotify}>
+                  Connect Spotify to Start
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="description">
+                  Find underground music that matches your taste profile across decentralized
+                  platforms, African music scenes, and deep archives.
+                </p>
+
+                <div className="external-search">
+                  <div className="source-toggles source-toggles-grid">
+                    {ALL_SOURCES.map(source => (
+                      <label key={source.id} className="source-toggle" title={source.description}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSources.includes(source.id)}
+                          onChange={() => toggleSource(source.id)}
+                        />
+                        <span>{source.name}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <label className="deep-toggle">
+                    <input
+                      type="checkbox"
+                      checked={deepSearch}
+                      onChange={(e) => setDeepSearch(e.target.checked)}
+                    />
+                    <span>Deep Search (only truly underground sources)</span>
+                  </label>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleShadowSearch}
+                    disabled={selectedSources.length === 0}
+                  >
+                    Run Shadow Search
+                  </button>
+                </div>
+
+                {shadowTracks.length > 0 && (
+                  <div className="external-results">
+                    <div className="shadow-summary">
+                      <p className="results-count">{shadowTracks.length} shadow tracks found</p>
+                      {shadowGenres.length > 0 && (
+                        <p className="genres-used">Based on: {shadowGenres.join(', ')}</p>
+                      )}
+                    </div>
+                    <ul className="external-tracks">
+                      {shadowTracks.map((track) => (
+                        <li key={track.id} className="external-track shadow-track">
+                          {track.artwork_url && (
+                            <img src={track.artwork_url} alt="" className="track-art" />
+                          )}
+                          <div className="track-info">
+                            <a href={track.url} target="_blank" rel="noopener noreferrer" className="track-title">
+                              {track.title}
+                            </a>
+                            <span className="track-artist">{track.artist}</span>
+                            <div className="track-meta">
+                              <span className={`source-badge ${track.source}`}>{track.source}</span>
+                              <span className="shadow-badge" title="Shadow Score">
+                                {(track.shadow_score * 100).toFixed(0)}
+                              </span>
+                              <span className="taste-badge" title="Taste Match">
+                                {(track.taste_match * 100).toFixed(0)}%
+                              </span>
+                              {track.genre && <span className="genre-tag">{track.genre}</span>}
+                              {track.region && <span className="region-badge">{track.region}</span>}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* External Search Mode */}
         {searchMode === 'external' && state !== 'searching' && (
           <div className="action-section">
             <p className="description">
-              Search Bandcamp, Reddit, and SoundCloud for underground music outside Spotify's algorithm.
+              Search all underground sources directly. Includes Audius (Web3), Audiomack (African),
+              Archive.org (netlabels), Bandcamp, Reddit, and SoundCloud.
             </p>
 
             <div className="external-search">
               <input
                 type="text"
-                placeholder="Enter genre or artist (e.g., experimental electronic)"
+                placeholder="Enter genre or artist (e.g., afrobeats, amapiano, experimental)"
                 value={externalQuery}
                 onChange={(e) => setExternalQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleExternalSearch()}
                 className="search-input"
               />
 
-              <div className="source-toggles">
-                {['bandcamp', 'reddit', 'soundcloud'].map(source => (
-                  <label key={source} className="source-toggle">
+              <div className="source-toggles source-toggles-grid">
+                {ALL_SOURCES.map(source => (
+                  <label key={source.id} className="source-toggle" title={source.description}>
                     <input
                       type="checkbox"
-                      checked={selectedSources.includes(source)}
-                      onChange={() => toggleSource(source)}
+                      checked={selectedSources.includes(source.id)}
+                      onChange={() => toggleSource(source.id)}
                     />
-                    <span>{source}</span>
+                    <span>{source.name}</span>
                   </label>
                 ))}
               </div>

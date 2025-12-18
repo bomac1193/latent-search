@@ -22,7 +22,7 @@ from context_builder import build_user_context
 from candidate_expander import expand_candidates
 from omission_scorer import get_top_recommendations
 import database as db
-from sources import search_all_sources, ExternalTrack
+from sources import search_all_sources, ExternalTrack, shadow_search, deep_shadow_search, ShadowTrack
 
 
 app = FastAPI(
@@ -114,6 +114,30 @@ class ExternalTrackResponse(BaseModel):
 class ExternalSearchResponse(BaseModel):
     """Response from external source search."""
     tracks: list[ExternalTrackResponse]
+    sources_searched: list[str]
+    total_found: int
+
+
+class ShadowTrackResponse(BaseModel):
+    """A track from shadow search with taste matching."""
+    id: str
+    title: str
+    artist: str
+    source: str
+    url: str
+    artwork_url: Optional[str] = None
+    genre: Optional[str] = None
+    plays: Optional[int] = None
+    shadow_score: float
+    taste_match: float
+    combined_score: float
+    region: Optional[str] = None
+
+
+class ShadowSearchResponse(BaseModel):
+    """Response from taste-matched shadow search."""
+    tracks: list[ShadowTrackResponse]
+    genres_searched: list[str]
     sources_searched: list[str]
     total_found: int
 
@@ -327,6 +351,164 @@ async def search_external_sources(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"External search failed: {str(e)}")
+
+
+# =========================================================================
+# SHADOW SEARCH - TASTE MATCHED UNDERGROUND DISCOVERY
+# =========================================================================
+
+@app.get("/search/shadow", response_model=ShadowSearchResponse)
+async def run_shadow_search(
+    genres: str = Query(..., description="Comma-separated genres from user's taste profile"),
+    sources: str = Query(
+        "audius,audiomack,archive,bandcamp,reddit,soundcloud",
+        description="Comma-separated sources to search"
+    ),
+    limit: int = Query(30, ge=1, le=100, description="Maximum results"),
+    deep: bool = Query(False, description="Deep search - only truly underground sources")
+):
+    """
+    Taste-matched shadow search.
+
+    Searches underground sources for music that:
+    1. Matches the user's genre preferences (from Spotify)
+    2. Is invisible to mainstream algorithms
+    3. Prioritizes obscurity (high shadow score)
+
+    Results are ranked by combined score = shadow_score * taste_match
+
+    Sources:
+    - audius: Decentralized Web3 music platform
+    - audiomack: Strong African music presence
+    - archive: Internet Archive (netlabels, live recordings)
+    - bandcamp: Underground/indie artists
+    - reddit: Community-curated discoveries
+    - soundcloud: Emerging artists
+    """
+    genre_list = [g.strip() for g in genres.split(",") if g.strip()]
+    source_list = [s.strip() for s in sources.split(",") if s.strip()]
+
+    if not genre_list:
+        raise HTTPException(status_code=400, detail="At least one genre is required")
+
+    try:
+        if deep:
+            tracks = await deep_shadow_search(
+                user_genres=genre_list,
+                limit=limit
+            )
+        else:
+            tracks = await shadow_search(
+                user_genres=genre_list,
+                limit=limit,
+                sources=source_list,
+                include_african=True
+            )
+
+        response_tracks = [
+            ShadowTrackResponse(
+                id=t.id,
+                title=t.title,
+                artist=t.artist,
+                source=t.source,
+                url=t.url,
+                artwork_url=t.artwork_url,
+                genre=t.genre,
+                plays=t.plays,
+                shadow_score=t.shadow_score,
+                taste_match=t.taste_match,
+                combined_score=t.combined_score,
+                region=t.region,
+            )
+            for t in tracks[:limit]
+        ]
+
+        return ShadowSearchResponse(
+            tracks=response_tracks,
+            genres_searched=genre_list,
+            sources_searched=source_list,
+            total_found=len(response_tracks),
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Shadow search failed: {str(e)}")
+
+
+@app.get("/search/shadow/spotify", response_model=ShadowSearchResponse)
+async def run_shadow_search_with_spotify(
+    access_token: str = Query(..., description="Spotify access token"),
+    sources: str = Query(
+        "audius,audiomack,archive,bandcamp,reddit,soundcloud",
+        description="Comma-separated sources to search"
+    ),
+    limit: int = Query(30, ge=1, le=100, description="Maximum results"),
+    deep: bool = Query(False, description="Deep search - only truly underground")
+):
+    """
+    Shadow search using Spotify listening history to determine taste.
+
+    Automatically extracts genres from your Spotify profile and searches
+    underground sources for matching music.
+    """
+    source_list = [s.strip() for s in sources.split(",") if s.strip()]
+
+    try:
+        # Build user context from Spotify
+        client = SpotifyClient(access_token)
+        context = await build_user_context(client, time_range="all")
+
+        # Get top genres from context
+        sorted_genres = sorted(
+            context.genre_weights.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        top_genres = [g[0] for g in sorted_genres[:5]]
+
+        if not top_genres:
+            top_genres = ["electronic", "experimental"]  # Fallback
+
+        # Run shadow search with user's genres
+        if deep:
+            tracks = await deep_shadow_search(
+                user_genres=top_genres,
+                limit=limit
+            )
+        else:
+            tracks = await shadow_search(
+                user_genres=top_genres,
+                limit=limit,
+                sources=source_list,
+                include_african=True
+            )
+
+        response_tracks = [
+            ShadowTrackResponse(
+                id=t.id,
+                title=t.title,
+                artist=t.artist,
+                source=t.source,
+                url=t.url,
+                artwork_url=t.artwork_url,
+                genre=t.genre,
+                plays=t.plays,
+                shadow_score=t.shadow_score,
+                taste_match=t.taste_match,
+                combined_score=t.combined_score,
+                region=t.region,
+            )
+            for t in tracks[:limit]
+        ]
+
+        return ShadowSearchResponse(
+            tracks=response_tracks,
+            genres_searched=top_genres,
+            sources_searched=source_list,
+            total_found=len(response_tracks),
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Shadow search failed: {str(e)}")
 
 
 # =========================================================================

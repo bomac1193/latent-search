@@ -190,11 +190,11 @@ export interface ExternalSearchResponse {
 }
 
 /**
- * Search external sources (Bandcamp, Reddit, SoundCloud) for underground music.
+ * Search external sources for underground music.
  */
 export async function searchExternalSources(
   query: string,
-  sources: string[] = ['bandcamp', 'reddit', 'soundcloud'],
+  sources: string[] = ['bandcamp', 'reddit', 'soundcloud', 'audius', 'audiomack', 'archive'],
   limit: number = 30
 ): Promise<ExternalSearchResponse> {
   const params = new URLSearchParams({
@@ -210,3 +210,89 @@ export async function searchExternalSources(
   }
   return response.json();
 }
+
+// =========================================================================
+// SHADOW SEARCH - TASTE-MATCHED UNDERGROUND DISCOVERY
+// =========================================================================
+
+export interface ShadowTrack {
+  id: string;
+  title: string;
+  artist: string;
+  source: string;
+  url: string;
+  artwork_url: string | null;
+  genre: string | null;
+  plays: number | null;
+  shadow_score: number;
+  taste_match: number;
+  combined_score: number;
+  region: string | null;
+}
+
+export interface ShadowSearchResponse {
+  tracks: ShadowTrack[];
+  genres_searched: string[];
+  sources_searched: string[];
+  total_found: number;
+}
+
+/**
+ * Shadow search with explicit genres.
+ * Finds taste-matched underground music across all sources.
+ */
+export async function shadowSearch(
+  genres: string[],
+  sources: string[] = ['audius', 'audiomack', 'archive', 'bandcamp', 'reddit', 'soundcloud'],
+  limit: number = 30,
+  deep: boolean = false
+): Promise<ShadowSearchResponse> {
+  const params = new URLSearchParams({
+    genres: genres.join(','),
+    sources: sources.join(','),
+    limit: limit.toString(),
+    deep: deep.toString(),
+  });
+
+  const response = await fetch(`${API_BASE}/search/shadow?${params}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Shadow search failed' }));
+    throw new Error(error.detail || 'Shadow search failed');
+  }
+  return response.json();
+}
+
+/**
+ * Shadow search using Spotify profile.
+ * Automatically extracts genres from Spotify listening history.
+ */
+export async function shadowSearchWithSpotify(
+  accessToken: string,
+  sources: string[] = ['audius', 'audiomack', 'archive', 'bandcamp', 'reddit', 'soundcloud'],
+  limit: number = 30,
+  deep: boolean = false
+): Promise<ShadowSearchResponse> {
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    sources: sources.join(','),
+    limit: limit.toString(),
+    deep: deep.toString(),
+  });
+
+  const response = await fetch(`${API_BASE}/search/shadow/spotify?${params}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Shadow search failed' }));
+    throw new Error(error.detail || 'Shadow search failed');
+  }
+  return response.json();
+}
+
+// All available external sources
+export const ALL_SOURCES = [
+  { id: 'audius', name: 'Audius', description: 'Decentralized Web3 music' },
+  { id: 'audiomack', name: 'Audiomack', description: 'African & underground hip-hop' },
+  { id: 'archive', name: 'Archive.org', description: 'Netlabels & live recordings' },
+  { id: 'bandcamp', name: 'Bandcamp', description: 'Indie & underground' },
+  { id: 'reddit', name: 'Reddit', description: 'Community curated' },
+  { id: 'soundcloud', name: 'SoundCloud', description: 'Emerging artists' },
+];
