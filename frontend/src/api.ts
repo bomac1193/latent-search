@@ -290,10 +290,17 @@ export async function shadowSearchWithSpotify(
 
 // All available external sources
 export const ALL_SOURCES = [
+  // Original sources
   { id: 'audius', name: 'Audius', description: 'Decentralized Web3 music' },
   { id: 'audiomack', name: 'Audiomack', description: 'African & underground hip-hop' },
   { id: 'archive', name: 'Archive.org', description: 'Netlabels & live recordings' },
   { id: 'bandcamp', name: 'Bandcamp', description: 'Indie & underground' },
   { id: 'reddit', name: 'Reddit', description: 'Community curated' },
   { id: 'soundcloud', name: 'SoundCloud', description: 'Emerging artists' },
+  // NEW: Global underground sources
+  { id: 'vk', name: 'VK Music', description: 'Russian underground (390M users)' },
+  { id: 'telegram', name: 'Telegram', description: 'Music channels & leaks' },
+  { id: 'netease', name: 'NetEase', description: 'Chinese indie (611K artists)' },
+  { id: 'funkwhale', name: 'Funkwhale', description: 'Federated self-hosted music' },
+  { id: 'mixcloud', name: 'Mixcloud', description: 'DJ mixes & radio shows' },
 ];

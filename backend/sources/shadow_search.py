@@ -22,6 +22,13 @@ from .bandcamp import search_bandcamp, BandcampTrack
 from .reddit import search_reddit, RedditTrack
 from .soundcloud import search_soundcloud, SoundCloudTrack
 
+# New global underground sources
+from .vk import search_vk, get_vk_underground, VKTrack
+from .telegram_music import search_telegram, get_telegram_underground, TelegramTrack
+from .netease import search_netease, get_netease_indie, NetEaseTrack
+from .funkwhale import search_funkwhale, get_funkwhale_underground, FunkwhaleTrack
+from .mixcloud import search_mixcloud, get_mixcloud_underground, MixcloudTrack
+
 
 @dataclass
 class ShadowTrack:
@@ -90,10 +97,18 @@ def calculate_shadow_score(
 
     # Source factor (0-0.3)
     source_scores = {
+        # Tier 1: Most underground
+        "funkwhale": 0.35,  # Self-hosted federated = extremely underground
+        "telegram": 0.33,   # Leak channels, unreleased tracks
         "audius": 0.3,      # Decentralized = most underground
-        "archive": 0.28,    # Free archive = very underground
         "netlabels": 0.3,   # Netlabels are extremely underground
+        "archive": 0.28,    # Free archive = very underground
+        # Tier 2: Underground
+        "vk": 0.27,         # Russian underground scene
+        "netease": 0.26,    # Chinese indie (611K+ artists)
         "bandcamp": 0.25,   # Indie-focused
+        "mixcloud": 0.23,   # DJ mixes, curated sets
+        # Tier 3: Community
         "reddit": 0.2,      # Community-curated
         "audiomack": 0.18,  # African underground
         "soundcloud": 0.15, # More mainstream now
@@ -203,6 +218,42 @@ def convert_to_shadow_track(
         is_downloadable = False
         region = None
         embed_url = track.embed_url
+    # New global underground sources
+    elif isinstance(track, VKTrack):
+        plays = track.plays
+        genre = track.genre
+        artwork = track.artwork_url
+        is_downloadable = False
+        region = "russia"
+        embed_url = track.embed_url
+    elif isinstance(track, TelegramTrack):
+        plays = track.plays
+        genre = track.genre
+        artwork = track.artwork_url
+        is_downloadable = False
+        region = None
+        embed_url = track.embed_url
+    elif isinstance(track, NetEaseTrack):
+        plays = track.plays
+        genre = track.genre
+        artwork = track.artwork_url
+        is_downloadable = False
+        region = "china"
+        embed_url = track.embed_url
+    elif isinstance(track, FunkwhaleTrack):
+        plays = track.plays
+        genre = track.genre
+        artwork = track.artwork_url
+        is_downloadable = True  # Funkwhale is usually free
+        region = None
+        embed_url = track.embed_url
+    elif isinstance(track, MixcloudTrack):
+        plays = track.plays
+        genre = track.genre
+        artwork = track.artwork_url
+        is_downloadable = False
+        region = None
+        embed_url = track.embed_url
     else:
         # Generic fallback
         plays = getattr(track, 'plays', None)
@@ -210,7 +261,7 @@ def convert_to_shadow_track(
         artwork = getattr(track, 'artwork_url', None)
         embed_url = getattr(track, 'embed_url', None)
         is_downloadable = False
-        region = None
+        region = getattr(track, 'region', None)
 
     shadow_score = calculate_shadow_score(plays, source, is_downloadable)
     taste_match = calculate_taste_match(genre, user_genres)
@@ -252,7 +303,12 @@ async def shadow_search(
         List of ShadowTracks sorted by combined score
     """
     if sources is None:
-        sources = ["audius", "audiomack", "archive", "bandcamp", "reddit", "soundcloud"]
+        sources = [
+            # Original sources
+            "audius", "audiomack", "archive", "bandcamp", "reddit", "soundcloud",
+            # New global underground sources
+            "vk", "telegram", "netease", "funkwhale", "mixcloud"
+        ]
 
     all_tracks: list[ShadowTrack] = []
 
@@ -264,6 +320,7 @@ async def shadow_search(
     tasks = []
 
     for genre in search_genres:
+        # Original sources
         if "audius" in sources:
             tasks.append(("audius", get_underground_audius(genre, limit=limit // 2)))
             tasks.append(("audius", search_audius(genre, limit=limit // 2)))
@@ -285,6 +342,22 @@ async def shadow_search(
 
         if "soundcloud" in sources:
             tasks.append(("soundcloud", search_soundcloud(genre, limit=limit // 2)))
+
+        # NEW: Global underground sources
+        if "vk" in sources:
+            tasks.append(("vk", get_vk_underground(genre, limit=limit // 2)))
+
+        if "telegram" in sources:
+            tasks.append(("telegram", get_telegram_underground(genre, limit=limit // 2)))
+
+        if "netease" in sources:
+            tasks.append(("netease", get_netease_indie(genre, limit=limit // 2)))
+
+        if "funkwhale" in sources:
+            tasks.append(("funkwhale", get_funkwhale_underground(genre, limit=limit // 2)))
+
+        if "mixcloud" in sources:
+            tasks.append(("mixcloud", get_mixcloud_underground(genre, limit=limit // 2)))
 
     # Execute all searches concurrently
     print(f"[shadow] Searching {len(tasks)} endpoints for genres: {search_genres}")
@@ -345,9 +418,25 @@ async def deep_shadow_search(
     """
     Deep shadow search - prioritizes the most obscure sources.
     For users who want to go really underground.
+
+    Uses:
+    - Funkwhale (federated, self-hosted)
+    - Telegram (leak channels, unreleased)
+    - Audius (decentralized Web3)
+    - Archive.org (netlabels, free music)
+    - VK (Russian underground)
+    - NetEase (Chinese indie)
     """
     # Focus on the most underground sources
-    deep_sources = ["audius", "archive", "bandcamp"]
+    deep_sources = [
+        "funkwhale",  # Federated = most underground
+        "telegram",   # Leak channels
+        "audius",     # Decentralized
+        "archive",    # Netlabels
+        "vk",         # Russian scene
+        "netease",    # Chinese indie
+        "bandcamp",   # Indie focused
+    ]
 
     tracks = await shadow_search(
         user_genres=user_genres,

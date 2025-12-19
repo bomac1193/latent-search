@@ -211,6 +211,32 @@
   color: #4285f4;
 }
 
+/* NEW: Global underground source badges */
+.source-badge.vk {
+  background: rgba(76, 117, 163, 0.2);
+  color: #4c75a3;
+}
+
+.source-badge.telegram {
+  background: rgba(0, 136, 204, 0.2);
+  color: #0088cc;
+}
+
+.source-badge.netease {
+  background: rgba(196, 30, 58, 0.2);
+  color: #c41e3a;
+}
+
+.source-badge.funkwhale {
+  background: rgba(0, 188, 140, 0.2);
+  color: #00bc8c;
+}
+
+.source-badge.mixcloud {
+  background: rgba(82, 177, 178, 0.2);
+  color: #52b1b2;
+}
+
 .shadow-badge {
   font-size: 0.7rem;
   padding: 0.15rem 0.5rem;
