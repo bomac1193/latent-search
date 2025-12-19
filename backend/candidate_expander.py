@@ -1,16 +1,18 @@
 """
 Candidate Expansion Module.
 
-Generates candidate artists/tracks that the user has NOT listened to,
-but are contextually adjacent to their listening history.
+Generates candidate artists that the user has NOT listened to,
+but are STRUCTURALLY connected to their listening history.
 
-Uses genre-based search since related-artists API is restricted for new apps.
+Key constraint: A candidate must appear as related to at least 2
+different recurring seed artists to be eligible. This ensures
+structural omission, not random adjacency.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 from spotify_client import SpotifyClient
 from context_builder import UserContext
-from config import RECENCY_CUTOFF_YEAR
+from config import RECENCY_CUTOFF_YEAR, MIN_SEED_SUPPORT
 
 
 @dataclass
@@ -21,7 +23,7 @@ class CandidateArtist:
     genres: list[str]
     popularity: int
     # How the candidate was discovered
-    source: str  # "genre_search", "recommendation"
+    source: str  # "related_artist", "genre_search"
     # Which genre led to this candidate
     source_genre: Optional[str] = None
     # Earliest album year (for recency scoring)
@@ -33,6 +35,11 @@ class CandidateArtist:
     audio_features: Optional[dict] = None
     # Genre overlap score
     genre_overlap: float = 0.0
+    # STRUCTURAL SUPPORT: which seed artists link to this candidate
+    seed_artist_ids: list[str] = field(default_factory=list)
+    seed_artist_names: list[str] = field(default_factory=list)
+    # Count of seed artists that support this candidate
+    seed_support_count: int = 0
 
 
 async def expand_candidates(
@@ -43,146 +50,137 @@ async def expand_candidates(
     max_popularity: int = 60
 ) -> list[CandidateArtist]:
     """
-    Generate candidate artists from user's context using genre search.
+    Generate candidate artists from user's context.
 
-    Strategy:
-    1. Get user's top genres
-    2. Search for artists in those genres
-    3. Filter out known artists
-    4. Score by genre overlap
-
-    min_popularity/max_popularity: Filter artists by popularity range
+    STRATEGY:
+    1. Use recurring artists as seeds (appear in 2+ time windows)
+    2. Get related artists for each seed
+    3. Track which seeds link to each candidate
+    4. REQUIRE: candidate must be linked by 2+ seeds (structural omission)
+    5. Filter out known artists
+    6. Score by genre overlap
     """
-    candidates: dict[str, CandidateArtist] = {}
+    # Track candidates and their seed support
+    candidate_support: dict[str, dict] = {}  # artist_id -> {data, seed_ids, seed_names}
 
-    # Get top genres from user's profile
-    top_genres = sorted(
-        context.genre_weights.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )[:10]  # Top 10 genres
+    # Use recurring artists as seeds (these are the user's stable preferences)
+    seed_artist_ids = context.recurring_artist_ids
 
-    print(f"[DEBUG] Top genres: {[g[0] for g in top_genres]}")
+    # If not enough recurring artists, use top artists by position
+    if len(seed_artist_ids) < 5:
+        sorted_artists = sorted(
+            context.artists.values(),
+            key=lambda a: a.position_avg
+        )
+        seed_artist_ids = [a.id for a in sorted_artists[:10]]
+
+    print(f"[expand] Using {len(seed_artist_ids)} seed artists")
 
     # =========================================================================
-    # STEP 1: Search for artists by genre
+    # STEP 1: Get related artists for each seed
     # =========================================================================
-    for genre, weight in top_genres:
-        if len(candidates) >= max_candidates:
-            break
+    for seed_id in seed_artist_ids[:15]:  # Limit API calls
+        seed_artist = context.artists.get(seed_id)
+        seed_name = seed_artist.name if seed_artist else "Unknown"
 
         try:
-            # Search for artists in this genre
-            query = f'genre:"{genre}"'
-            results = await client.search_artists(query, limit=50)
-            artists = results.get("artists", {}).get("items", [])
+            related = await client.get_related_artists(seed_id)
+            related_artists = related.get("artists", [])
 
-            skipped_known = 0
-            skipped_pop = 0
-            for artist in artists:
+            for artist in related_artists:
                 artist_id = artist.get("id")
                 if not artist_id:
                     continue
 
                 # Skip known artists
                 if artist_id in context.known_artist_ids:
-                    skipped_known += 1
                     continue
 
-                # Skip if already added
-                if artist_id in candidates:
-                    continue
+                # Initialize or update candidate support
+                if artist_id not in candidate_support:
+                    popularity = artist.get("popularity", 0)
 
-                # Filter by popularity range
-                popularity = artist.get("popularity", 0)
-                if popularity < min_popularity or popularity > max_popularity:
-                    skipped_pop += 1
-                    continue
+                    # Skip if outside popularity range
+                    if popularity < min_popularity or popularity > max_popularity:
+                        continue
 
-                artist_genres = artist.get("genres", [])
+                    artist_genres = artist.get("genres", [])
 
-                candidates[artist_id] = CandidateArtist(
-                    id=artist_id,
-                    name=artist.get("name", "Unknown"),
-                    genres=artist_genres,
-                    popularity=popularity,
-                    source="genre_search",
-                    source_genre=genre,
-                    genre_overlap=_compute_genre_overlap(artist_genres, context.genre_weights)
-                )
+                    candidate_support[artist_id] = {
+                        "id": artist_id,
+                        "name": artist.get("name", "Unknown"),
+                        "genres": artist_genres,
+                        "popularity": popularity,
+                        "genre_overlap": _compute_genre_overlap(artist_genres, context.genre_weights),
+                        "seed_ids": [],
+                        "seed_names": [],
+                    }
 
-                if len(candidates) >= max_candidates:
-                    break
-
-            print(f"[DEBUG] Genre '{genre}': {len(artists)} found, {skipped_known} known, {skipped_pop} outside popularity range, {len(candidates)} total candidates")
+                # Add this seed as support
+                if seed_id not in candidate_support[artist_id]["seed_ids"]:
+                    candidate_support[artist_id]["seed_ids"].append(seed_id)
+                    candidate_support[artist_id]["seed_names"].append(seed_name)
 
         except Exception as e:
-            print(f"[DEBUG] Genre search failed for '{genre}': {e}")
+            print(f"[expand] Related artists failed for {seed_id}: {e}")
             continue
 
     # =========================================================================
-    # STEP 2: Try recommendations endpoint as fallback
+    # STEP 2: Filter to candidates with seed support (STRUCTURAL OMISSION)
     # =========================================================================
-    if len(candidates) < 20:
-        try:
-            seed_artists = list(context.artists.keys())[:5]
-            recs = await client.get_recommendations(seed_artists, limit=50)
-            tracks = recs.get("tracks", [])
+    candidates: list[CandidateArtist] = []
 
-            print(f"[DEBUG] Recommendations: got {len(tracks)} tracks")
+    # Dynamic threshold: if few recurring artists, accept 1+ seed support
+    effective_min_support = MIN_SEED_SUPPORT if len(seed_artist_ids) >= 3 else 1
 
-            # Extract unique artists from recommended tracks
-            for track in tracks:
-                for artist in track.get("artists", []):
-                    artist_id = artist.get("id")
-                    if not artist_id:
-                        continue
-                    if artist_id in context.known_artist_ids:
-                        continue
-                    if artist_id in candidates:
-                        continue
+    for artist_id, data in candidate_support.items():
+        seed_count = len(data["seed_ids"])
 
-                    # Fetch full artist details
-                    try:
-                        full_artist = await client.get_artist(artist_id)
-                        candidates[artist_id] = CandidateArtist(
-                            id=artist_id,
-                            name=full_artist.get("name", artist.get("name", "Unknown")),
-                            genres=full_artist.get("genres", []),
-                            popularity=full_artist.get("popularity", 50),
-                            source="recommendation",
-                            sample_track_id=track.get("id"),
-                            sample_track_name=track.get("name"),
-                            genre_overlap=_compute_genre_overlap(
-                                full_artist.get("genres", []),
-                                context.genre_weights
-                            )
-                        )
-                    except Exception:
-                        continue
+        # REQUIRE: at least effective_min_support seeds must link to this candidate
+        if seed_count < effective_min_support:
+            continue
 
-                    if len(candidates) >= max_candidates:
-                        break
+        candidates.append(CandidateArtist(
+            id=data["id"],
+            name=data["name"],
+            genres=data["genres"],
+            popularity=data["popularity"],
+            source="related_artist",
+            genre_overlap=data["genre_overlap"],
+            seed_artist_ids=data["seed_ids"],
+            seed_artist_names=data["seed_names"],
+            seed_support_count=seed_count,
+        ))
 
-                if len(candidates) >= max_candidates:
-                    break
-
-        except Exception as e:
-            print(f"[DEBUG] Recommendations failed: {e}")
+    print(f"[expand] {len(candidate_support)} candidates found, {len(candidates)} have {effective_min_support}+ seed support")
 
     # =========================================================================
-    # STEP 3: Fetch sample tracks for candidates without them
+    # STEP 3: If insufficient candidates, fall back to genre search
     # =========================================================================
-    candidates_list = list(candidates.values())
+    if len(candidates) < 10:
+        print("[expand] Insufficient related candidates, trying genre search...")
+        genre_candidates = await _expand_by_genre(
+            client, context,
+            existing_ids=set(c.id for c in candidates),
+            min_popularity=min_popularity,
+            max_popularity=max_popularity,
+            limit=max_candidates - len(candidates)
+        )
+        candidates.extend(genre_candidates)
 
-    # Sort by genre overlap to prioritize best matches
-    candidates_list.sort(key=lambda c: c.genre_overlap, reverse=True)
-    top_candidates = candidates_list[:50]
+    # =========================================================================
+    # STEP 4: Sort by seed support * genre overlap, then fetch details
+    # =========================================================================
+    candidates.sort(
+        key=lambda c: (c.seed_support_count * c.genre_overlap),
+        reverse=True
+    )
 
-    for candidate in top_candidates:
-        if candidate.sample_track_name:
-            continue  # Already has a sample
+    # Limit to top candidates
+    top_candidates = candidates[:max_candidates]
 
+    # Fetch sample tracks for top candidates
+    for candidate in top_candidates[:30]:
         try:
             top_tracks = await client.get_artist_top_tracks(candidate.id)
             tracks = top_tracks.get("tracks", [])
@@ -192,10 +190,8 @@ async def expand_candidates(
         except Exception:
             continue
 
-    # =========================================================================
-    # STEP 4: Fetch album years for recency scoring
-    # =========================================================================
-    for candidate in top_candidates[:30]:
+    # Fetch album years for recency scoring
+    for candidate in top_candidates[:20]:
         try:
             albums = await client.get_artist_albums(candidate.id, limit=5)
             album_items = albums.get("items", [])
@@ -214,8 +210,76 @@ async def expand_candidates(
         except Exception:
             continue
 
-    print(f"[DEBUG] Final candidates: {len(candidates)}")
-    return candidates_list
+    print(f"[expand] Final candidates: {len(top_candidates)}")
+    return top_candidates
+
+
+async def _expand_by_genre(
+    client: SpotifyClient,
+    context: UserContext,
+    existing_ids: set[str],
+    min_popularity: int,
+    max_popularity: int,
+    limit: int
+) -> list[CandidateArtist]:
+    """
+    Fallback: expand candidates by searching top genres.
+    These candidates won't have seed support, so they're lower priority.
+    """
+    candidates = []
+
+    top_genres = sorted(
+        context.genre_weights.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:5]
+
+    for genre, weight in top_genres:
+        if len(candidates) >= limit:
+            break
+
+        try:
+            query = f'genre:"{genre}"'
+            results = await client.search_artists(query, limit=30)
+            artists = results.get("artists", {}).get("items", [])
+
+            for artist in artists:
+                artist_id = artist.get("id")
+                if not artist_id:
+                    continue
+
+                if artist_id in context.known_artist_ids:
+                    continue
+                if artist_id in existing_ids:
+                    continue
+
+                popularity = artist.get("popularity", 0)
+                if popularity < min_popularity or popularity > max_popularity:
+                    continue
+
+                artist_genres = artist.get("genres", [])
+
+                candidates.append(CandidateArtist(
+                    id=artist_id,
+                    name=artist.get("name", "Unknown"),
+                    genres=artist_genres,
+                    popularity=popularity,
+                    source="genre_search",
+                    source_genre=genre,
+                    genre_overlap=_compute_genre_overlap(artist_genres, context.genre_weights),
+                    seed_support_count=0,  # No seed support for genre search
+                ))
+
+                existing_ids.add(artist_id)
+
+                if len(candidates) >= limit:
+                    break
+
+        except Exception as e:
+            print(f"[expand] Genre search failed for '{genre}': {e}")
+            continue
+
+    return candidates
 
 
 def _compute_genre_overlap(

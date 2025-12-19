@@ -1,53 +1,74 @@
 # Latent Search
 
-A research MVP for music discovery that surfaces contextually relevant artists systematically excluded by standard recommendation systems.
+A diagnostic instrument for music discovery through omission scoring. Surfaces artists structurally omitted from your listening despite high contextual fit.
 
 ## What This Is
 
-Latent Search analyzes your Spotify listening history to find artists you *should* know about but don't. It explicitly penalizes popularity and recency—the exact signals that algorithmic recommendations over-optimize for.
+Latent Search is **NOT a search tool**. It's a diagnostic instrument that:
 
-**This is not a consumer product.** It's a testbed for evaluating whether omission-based discovery produces meaningfully different results than engagement-optimized feeds.
+1. **Diagnoses** your listening profile across time windows
+2. **Scans** for structurally omitted artists (high context fit, zero exposure)
+3. **Collects feedback** to improve future scans
 
-## How It Works
+**This is not a consumer product.** It's a testbed for evaluating omission-based discovery.
 
-### 1. Longitudinal Context Profiling
+## Flow
 
-Instead of treating listening history as a flat preference signal, we build a context profile across three time windows:
+```
+Connect Spotify → Run Diagnosis → Run Omission Scan → Provide Feedback
+```
+
+### Step 1: Diagnosis
+
+Analyzes your Spotify listening history across three time windows:
 
 - **Short-term** (~4 weeks): Recent listening
 - **Medium-term** (~6 months): Stable patterns
 - **Long-term** (years): Core identity
 
-Artists appearing in multiple windows are marked as "recurring"—these represent stable context, not momentary interest.
+Produces:
+- **Recurring artists**: Artists appearing in 2+ time windows (stable preferences)
+- **Top genres**: Weighted by recurrence
+- **Audio profile**: Energy, danceability, valence, acousticness centers
+- **Template-based notes**: Observations about your listening patterns
 
-### 2. Candidate Expansion
+### Step 2: Omission Scan
 
-From your recurring artists, we fetch Spotify's "fans also like" relationships. These are artists contextually adjacent to your listening but potentially absent from your library.
+Uses your diagnosis to find artists you *should* know but don't.
 
-Key filter: **Any artist you've already listened to is excluded.**
+**Key constraint**: A candidate must be related to **2+ recurring artists** to be eligible. This ensures structural omission, not random adjacency.
 
-### 3. Omission Scoring
+Returns **max 5 results** with:
+- Artist name + sample track
+- Omission score
+- Template-based explanation
+- Evidence (seed artists, genre overlap, audio similarity)
 
-Each candidate receives an **omission score** computed from five components:
+### Step 3: Feedback
+
+For each result, provide feedback:
+- **"Makes sense"** → +0.10 score boost for future scans
+- **"Not for me"** → -0.15 score penalty
+- **2+ rejections** → Hard exclude from future results
+
+Feedback persists across sessions.
+
+## Omission Scoring Algorithm
+
+Each candidate receives an **omission score**:
 
 | Component | Weight | Description |
 |-----------|--------|-------------|
-| Contextual Similarity | 35% | Genre overlap + audio feature match to your profile |
-| Exposure Penalty | 25% | Reward for being absent from your history |
-| Playlist Saturation | 15% | Penalty for high-playlist-presence artists |
-| Popularity Penalty | 15% | Explicit penalty for popular artists (0-100 scale) |
-| Recency Penalty | 10% | Penalty for artists who debuted after 2018 |
+| Contextual Similarity | 35% | Genre overlap + audio feature match |
+| Exposure Penalty | 25% | Reward for being absent from history |
+| Playlist Saturation | 15% | Penalty for high-playlist-presence |
+| Popularity Penalty | 15% | Penalty for popular artists |
+| Recency Penalty | 10% | Penalty for post-2018 debuts |
 
-**High omission score = "This artist fits your context but you've never encountered them."**
-
-### 4. Output
-
-Returns 5-7 artists maximum. Each result includes:
-- Artist name and sample track
-- Genres
-- Omission score
-- Template-based explanation (no AI-generated text)
-- Which of your artists led to this discovery
+**Confidence Gate**: Only returns candidates that pass ALL thresholds:
+- 2+ seed artist support
+- 55%+ contextual similarity
+- Popularity ≤ 70
 
 ## Setup
 
@@ -57,133 +78,138 @@ Returns 5-7 artists maximum. Each result includes:
 - Node.js 18+
 - Spotify Developer Account
 
-### 1. Create Spotify App
+### Quick Start
 
-1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app
-3. Set redirect URI to `http://localhost:5173/callback`
-4. Note your Client ID and Client Secret
+```bash
+# Clone and setup
+git clone <repo>
+cd latent-search
 
-### 2. Backend Setup
+# Start everything
+./start.sh
+```
+
+Or manually:
+
+### Backend
 
 ```bash
 cd backend
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your Spotify credentials
+# Edit .env with your Spotify credentials:
+# SPOTIFY_CLIENT_ID=your_client_id
+# SPOTIFY_CLIENT_SECRET=your_client_secret
 
 # Run server
 uvicorn main:app --reload --port 8000
 ```
 
-### 3. Frontend Setup
+### Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Run dev server
 npm run dev
 ```
 
-### 4. Use
+### Spotify App Setup
 
-1. Open http://localhost:5173
-2. Click "Connect Spotify"
-3. Authorize the app
-4. Click "Run Latent Search"
-5. View results
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app
+3. Set redirect URI to `http://localhost:5173/callback`
+4. Copy Client ID and Client Secret to `.env`
+
+## API Endpoints
+
+### Auth
+
+- `GET /auth/spotify/url` - Get OAuth authorization URL
+- `GET /auth/spotify/callback?code=...` - Exchange code for token
+
+### Diagnosis
+
+- `GET /diagnosis?access_token=...` - Run listening profile diagnosis
+
+Returns:
+```json
+{
+  "recurring_artists": [...],
+  "top_genres": [{"genre": "...", "weight": 0.15}],
+  "audio_feature_profile": {...},
+  "notes": ["Your listening clusters around..."],
+  "total_artists_analyzed": 45,
+  "total_tracks_analyzed": 120
+}
+```
+
+### Omission Scan
+
+- `GET /scan?access_token=...&min_popularity=5&max_popularity=60`
+
+Returns max 5 results:
+```json
+{
+  "results": [{
+    "artist_id": "...",
+    "artist_name": "...",
+    "omission_score": 0.72,
+    "explanation": "Related to 3 of your recurring artists...",
+    "evidence": {
+      "seed_artists": ["Artist A", "Artist B"],
+      "genre_overlap_count": 4,
+      "audio_similarity_score": 0.68
+    }
+  }],
+  "diagnosis_summary": "Based on 45 artists, 12 recurring...",
+  "candidates_evaluated": 87,
+  "confidence_threshold_used": 0.55
+}
+```
+
+### Feedback
+
+- `POST /feedback` - Submit accept/reject feedback
+- `GET /feedback/stats` - Get aggregate statistics
+- `GET /feedback/history` - Get recent feedback
 
 ## Project Structure
 
 ```
 latent-search/
 ├── backend/
-│   ├── main.py              # FastAPI app, endpoints
+│   ├── main.py              # FastAPI app, all endpoints
 │   ├── spotify_client.py    # Spotify API wrapper
 │   ├── context_builder.py   # Longitudinal profile builder
-│   ├── candidate_expander.py # Candidate generation
-│   ├── omission_scorer.py   # THE CORE ALGORITHM
-│   ├── config.py            # Configuration
+│   ├── candidate_expander.py # Candidate generation (2+ seed support)
+│   ├── omission_scorer.py   # Core algorithm + confidence gate
+│   ├── database.py          # SQLite feedback storage
+│   ├── config.py            # Algorithm configuration
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx          # Main UI component
+│   │   ├── App.tsx          # Diagnostic instrument UI
 │   │   ├── api.ts           # Backend API client
-│   │   └── *.css            # Minimal styling
-│   ├── package.json
-│   └── vite.config.ts
+│   │   └── App.css          # Styling
+│   └── package.json
+├── start.sh                 # Quick start script
 └── README.md
 ```
-
-## Algorithm Details
-
-### Omission Score Formula
-
-```python
-omission_score = (
-    contextual_similarity * 0.35 +
-    exposure_score * 0.25 +
-    saturation_score * 0.15 +
-    popularity_score * 0.15 +
-    recency_score * 0.10
-)
-```
-
-### Contextual Similarity
-
-Combines:
-1. **Genre overlap**: How many of the candidate's genres match your weighted genre profile
-2. **Audio feature similarity**: Distance between candidate's track features and your profile center
-
-Audio features compared:
-- Energy
-- Danceability
-- Valence
-- Acousticness
-- Instrumentalness
-- Tempo
-
-### Popularity Penalty
-
-```python
-# Popularity is 0-100 (Spotify's scale)
-# We cap at 60 to avoid over-penalizing moderate popularity
-capped = min(popularity, 60)
-popularity_score = 1.0 - (capped / 100)
-```
-
-Artists with popularity below 30 get maximum score. Artists above 70 get heavily penalized.
-
-### Recency Penalty
-
-```python
-if earliest_album_year <= 2018:
-    recency_score = 1.0  # Full score for pre-2018 artists
-elif earliest_album_year >= 2023:
-    recency_score = 0.2  # Heavy penalty for very recent artists
-else:
-    # Linear interpolation
-    recency_score = interpolate(...)
-```
-
-The 2018 cutoff is intentional: it pre-dates the current era of hyper-recency-optimized recommendation.
 
 ## Configuration
 
 Key settings in `backend/config.py`:
 
 ```python
+# Algorithm weights
 OMISSION_WEIGHTS = {
     "contextual_similarity": 0.35,
     "exposure_penalty": 0.25,
@@ -192,32 +218,42 @@ OMISSION_WEIGHTS = {
     "recency_penalty": 0.10,
 }
 
-POPULARITY_CEILING = 60     # Max popularity before heavy penalty
-RECENCY_CUTOFF_YEAR = 2018  # Pre-this = full recency score
-MAX_RESULTS = 7             # Never return more than this
+# Thresholds
+MAX_RESULTS = 5              # Never return more than 5
+MIN_SEED_SUPPORT = 2         # Must relate to 2+ recurring artists
+MIN_CONTEXTUAL_SIMILARITY = 0.55
+MAX_POPULARITY_GATE = 70
+POPULARITY_CEILING = 60
+RECENCY_CUTOFF_YEAR = 2018
 ```
 
-## Evaluation Criteria
+## Feedback Adjustments
 
-A successful result:
-1. Is **relevant** (fits the user's listening context)
-2. Is **unfamiliar** (user hasn't heard this artist)
-3. Is **explainable** (user can understand why it surfaced)
-4. Does **not** feel like a standard Spotify recommendation
-
-If results feel "Spotify-ish," the algorithm needs adjustment.
+```python
+ACCEPT_BOOST = 0.10   # Add to score when accepted
+REJECT_PENALTY = 0.15 # Subtract from score when rejected
+HARD_REJECT_COUNT = 2 # Exclude after 2 rejections
+```
 
 ## What This Doesn't Do
 
 - Generate playlists
 - Optimize for engagement
-- Add social features
 - Use AI text generation
-- Return more than 7 results
+- Return more than 5 results
 - Support infinite scroll
 - Have a search bar
+- Show external sources
 
-These are intentional constraints.
+These are intentional constraints for a diagnostic instrument.
+
+## Evaluation Criteria
+
+A successful result:
+1. Is **relevant** (fits listening context)
+2. Is **unfamiliar** (not in library)
+3. Is **explainable** (user can see the evidence)
+4. Does **not** feel like a standard Spotify recommendation
 
 ## License
 

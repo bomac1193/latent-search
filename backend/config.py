@@ -40,5 +40,10 @@ POPULARITY_CEILING = 60
 # Release year cutoff for recency penalty
 RECENCY_CUTOFF_YEAR = 2018
 
-# Maximum results to return
-MAX_RESULTS = 7
+# Maximum results to return (strict cap for diagnosis instrument)
+MAX_RESULTS = 5
+
+# Confidence gate thresholds
+MIN_SEED_SUPPORT = 2          # Candidate must relate to 2+ recurring artists
+MIN_CONTEXTUAL_SIMILARITY = 0.55  # Minimum similarity to pass confidence gate
+MAX_POPULARITY_GATE = 70      # Max popularity for confidence gate
